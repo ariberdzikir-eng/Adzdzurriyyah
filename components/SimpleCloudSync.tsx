@@ -12,17 +12,40 @@ export const SimpleCloudSync: React.FC<SimpleCloudSyncProps> = ({ transactions, 
   const [group, setGroup] = useState(localStorage.getItem('mosque_group') || '');
   const [loading, setLoading] = useState(false);
 
-  // METODE 1: LINK AJAIB (TANPA SERVER, PASTI TEMBUS BLOKIR)
-  const sendMagicLink = () => {
-    const dataStr = JSON.stringify(transactions);
-    const encoded = btoa(unescape(encodeURIComponent(dataStr)));
-    const url = `${window.location.origin}${window.location.pathname}#data=${encoded}`;
+  // 1. BAGIKAN LINK GRUP (SANGAT PENDEK)
+  const shareGroupLink = () => {
+    if (!group) return alert("Beri nama grup dulu (misal: adz-dzurriyyah)");
+    localStorage.setItem('mosque_group', group);
+    const shortLink = `${window.location.origin}${window.location.pathname}#g=${group}`;
     
-    const waUrl = `https://wa.me/?text=${encodeURIComponent('Assalamu’alaikum, ini update Laporan Keuangan Masjid terbaru. Silakan klik link ini untuk sinkronisasi data: ' + url)}`;
+    const waUrl = `https://wa.me/?text=${encodeURIComponent('Assalamu’alaikum, klik link ini untuk masuk ke Grup Laporan Keuangan Masjid: ' + shortLink)}`;
     window.open(waUrl, '_blank');
   };
 
-  // METODE 2: CLOUD GRUP (OTOMATIS)
+  // 2. KIRIM FILE VIA WA (SOLUSI ANTI-BLOKIR 100%)
+  const shareAsFile = async () => {
+    const dataStr = JSON.stringify(transactions);
+    const file = new File([dataStr], `Data_Masjid_${new Date().toLocaleDateString('id-ID').replace(/\//g, '-')}.json`, { type: 'application/json' });
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: 'Data Keuangan Masjid',
+          text: 'Berikut lampiran file data keuangan terbaru.'
+        });
+      } catch (e) { console.log('Share canceled'); }
+    } else {
+      // Fallback: Download file
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      a.click();
+      alert("File telah diunduh. Silakan kirim file tersebut ke grup WhatsApp pengurus.");
+    }
+  };
+
   const handleCloud = async (type: 'save' | 'load') => {
     if (!group) return alert("Masukkan Nama Grup!");
     setLoading(true);
@@ -30,64 +53,61 @@ export const SimpleCloudSync: React.FC<SimpleCloudSyncProps> = ({ transactions, 
     
     if (type === 'save') {
       const ok = await cloudSync.push(group, transactions);
-      alert(ok ? "Tersimpan di Cloud!" : "Gagal! WiFi kantor memblokir Cloud. Gunakan 'Kirim Link WA' saja.");
+      if (ok) alert("Data tersimpan di Cloud!");
+      else alert("WiFi kantor memblokir Cloud. Gunakan tombol 'Kirim File via WA' saja.");
     } else {
       const { data } = await cloudSync.pull(group);
-      if (data) { onRestore(data); alert("Data Cloud Berhasil Dimuat!"); }
+      if (data) { onRestore(data); alert("Data berhasil dimuat!"); }
       else alert("Data tidak ditemukan atau koneksi diblokir.");
     }
     setLoading(false);
   };
 
   return (
-    <div className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 mt-10">
-      <h2 className="text-lg font-black text-slate-800 uppercase italic mb-4">Sinkronisasi Pengurus</h2>
+    <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-slate-100 mt-10">
+      <h2 className="text-xl font-black text-slate-800 uppercase italic mb-6">Sinkronisasi Antar Pengurus</h2>
       
-      <div className="space-y-4">
-        {/* CARA PALING GAMPANG */}
-        <button 
-          onClick={sendMagicLink}
-          className="w-full py-5 bg-emerald-600 text-white font-black rounded-2xl uppercase tracking-widest text-[11px] flex items-center justify-center gap-3 shadow-lg shadow-emerald-100 active:scale-95 transition-all"
-        >
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.319 1.592 5.448 0 9.886-4.438 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884 0 2.225.569 3.961 1.694 5.854l-.993 3.629 3.861-.982z"/></svg>
-          Kirim Link Update ke WA
-        </button>
-
-        <div className="relative flex items-center">
-            <div className="flex-grow border-t border-slate-200"></div>
-            <span className="flex-shrink mx-4 text-[9px] font-bold text-slate-300 uppercase">Atau Pakai Cloud</span>
-            <div className="flex-grow border-t border-slate-200"></div>
+      <div className="space-y-6">
+        {/* INPUT GRUP */}
+        <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Nama Grup Pengurus</label>
+          <div className="flex gap-2">
+            <input 
+              type="text" 
+              placeholder="Contoh: masjid-kita" 
+              value={group}
+              onChange={(e) => setGroup(e.target.value.toLowerCase().replace(/\s/g, '-'))}
+              className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button onClick={() => { localStorage.setItem('mosque_group', group); alert('Nama Grup Disimpan!'); }} className="bg-slate-800 text-white px-5 rounded-xl font-black text-[10px] uppercase">Set</button>
+          </div>
         </div>
 
-        {/* CARA OTOMATIS (CLOUD) */}
-        <div className="flex gap-2">
-          <input 
-            type="text" 
-            placeholder="Nama Grup (cth: masjid123)" 
-            value={group}
-            onChange={(e) => setGroup(e.target.value.toLowerCase())}
-            className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs outline-none focus:ring-2 focus:ring-blue-500"
-          />
+        {/* PILIHAN UTAMA */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button 
-            disabled={loading}
-            onClick={() => handleCloud('load')}
-            className="px-4 bg-slate-100 text-slate-600 font-bold rounded-xl text-[10px] uppercase border hover:bg-slate-200"
+            onClick={shareGroupLink}
+            className="flex items-center justify-center gap-3 p-5 bg-blue-600 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest shadow-lg shadow-blue-100 active:scale-95 transition-all"
           >
-            Tarik
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+            Bagikan Link Grup
           </button>
+
           <button 
-            disabled={loading}
-            onClick={() => handleCloud('save')}
-            className="px-4 bg-slate-800 text-white font-bold rounded-xl text-[10px] uppercase hover:bg-slate-900"
+            onClick={shareAsFile}
+            className="flex items-center justify-center gap-3 p-5 bg-emerald-600 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest shadow-lg shadow-emerald-100 active:scale-95 transition-all"
           >
-            Simpan
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.301-.15-1.767-.872-2.04-.971-.272-.099-.47-.15-.669.15-.198.3-.77.97-.943 1.171-.173.201-.347.225-.648.075-.3-.15-1.265-.467-2.41-1.487-.893-.797-1.495-1.782-1.67-2.081-.173-.299-.018-.462.13-.61.137-.133.301-.351.451-.527.15-.176.198-.299.299-.499.102-.199.05-.374-.025-.525-.075-.15-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.299-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.767-.721 2.016-1.42.247-.699.247-1.296.174-1.42-.072-.124-.267-.199-.57-.348zM12.067 0C5.412 0 0 5.412 0 12.067c0 2.128.55 4.125 1.513 5.867L.03 24l6.233-1.636a12.003 12.003 0 005.804 1.503c6.656 0 12.068-5.412 12.068-12.067C24.067 5.412 18.724 0 12.067 0z"/></svg>
+            Kirim File via WA
           </button>
+        </div>
+
+        {/* TOMBOL SYNC MANUAL (CLOUD) */}
+        <div className="flex gap-2 pt-2">
+          <button onClick={() => handleCloud('load')} disabled={loading} className="flex-1 py-3 bg-slate-100 text-slate-600 font-black rounded-xl text-[9px] uppercase tracking-tighter border border-slate-200">Ambil Data Cloud</button>
+          <button onClick={() => handleCloud('save')} disabled={loading} className="flex-1 py-3 bg-slate-800 text-white font-black rounded-xl text-[9px] uppercase tracking-tighter">Simpan ke Cloud</button>
         </div>
       </div>
-      
-      <p className="text-[8px] text-slate-400 mt-4 text-center leading-relaxed uppercase font-bold tracking-tighter">
-        Tips: Gunakan "Link WA" jika Cloud gagal karena diblokir WiFi kantor.
-      </p>
     </div>
   );
 };
