@@ -12,6 +12,7 @@ import { TransactionDetailModal } from './components/TransactionDetailModal';
 import { ReportsView } from './components/ReportsView';
 import { CategorySettingsView } from './components/CategorySettingsView';
 import { DataManagementView } from './components/DataManagementView';
+import { BackupExcelView } from './components/BackupExcelView';
 import { AISummary } from './components/AISummary';
 import { Login } from './components/Login';
 import { PublicDashboard } from './components/PublicDashboard';
@@ -19,7 +20,7 @@ import { IncomeIcon, ExpenseIcon, BalanceIcon, PlusIcon } from './components/ico
 import { generateFinancialSummary } from './services/geminiService';
 import { GoogleDriveSync } from './components/GoogleDriveSync';
 
-type View = 'dashboard' | 'income' | 'expense' | 'transfer' | 'reports' | 'category-settings' | 'data-management';
+type View = 'dashboard' | 'income' | 'expense' | 'transfer' | 'reports' | 'category-settings' | 'data-management' | 'backup-excel';
 
 const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('id-ID', {
@@ -233,6 +234,9 @@ function App() {
     }
     if (currentView === 'data-management') {
       return <DataManagementView transactions={transactions} onImport={handleRestoreData} />;
+    }
+    if (currentView === 'backup-excel') {
+      return <BackupExcelView transactions={transactions} onImport={handleRestoreData} />;
     }
 
     let title = '';

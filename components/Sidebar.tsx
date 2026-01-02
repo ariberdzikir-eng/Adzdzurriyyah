@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { HomeIcon, ReportsIcon, LogoutIcon, IncomeIcon, ExpenseIcon, TransferIcon, SettingsIcon, JsonIcon } from './icons';
+import { HomeIcon, ReportsIcon, LogoutIcon, IncomeIcon, ExpenseIcon, TransferIcon, SettingsIcon, JsonIcon, ExcelIcon } from './icons';
 
-type View = 'dashboard' | 'income' | 'expense' | 'transfer' | 'reports' | 'category-settings' | 'data-management';
+type View = 'dashboard' | 'income' | 'expense' | 'transfer' | 'reports' | 'category-settings' | 'data-management' | 'backup-excel';
 
 interface SidebarProps {
   currentView: View;
@@ -25,7 +25,9 @@ const NavItem: React.FC<{
                 : 'text-gray-600 hover:bg-gray-200 hover:text-gray-800'
             }`}
         >
-            {icon}
+            <div className={isActive ? "text-white" : "text-gray-500"}>
+                {icon}
+            </div>
             <span className="ml-4 font-semibold">{label}</span>
         </li>
     );
@@ -78,6 +80,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, o
                         onClick={() => setCurrentView('reports')}
                     />
                     <div className="border-t border-gray-100 my-4"></div>
+                    <NavItem
+                        icon={<ExcelIcon className="h-6 w-6" />}
+                        label="Ekspor Excel"
+                        isActive={currentView === 'backup-excel'}
+                        onClick={() => setCurrentView('backup-excel')}
+                    />
                     <NavItem
                         icon={<SettingsIcon className="h-6 w-6" />}
                         label="Kategori"
