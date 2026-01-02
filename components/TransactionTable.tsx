@@ -1,10 +1,13 @@
 
 import React from 'react';
 import { Transaction } from '../types';
+import { TrashIcon, EditIcon } from './icons';
 
 interface TransactionTableProps {
   transactions: Transaction[];
   onRowClick?: (transaction: Transaction) => void;
+  onDelete?: (id: string) => void;
+  onEdit?: (transaction: Transaction) => void;
 }
 
 const formatCurrency = (amount: number) => {
@@ -38,8 +41,9 @@ const typeStyles = {
     }
 }
 
-export const TransactionTable: React.FC<TransactionTableProps> = ({ transactions, onRowClick }) => {
+export const TransactionTable: React.FC<TransactionTableProps> = ({ transactions, onRowClick, onDelete, onEdit }) => {
   const sortedTransactions = [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const hasActions = !!onDelete || !!onEdit;
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-md mt-6">
@@ -53,13 +57,14 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({ transactions
               <th className="py-3 px-4 font-semibold text-gray-600">Kategori</th>
               <th className="py-3 px-4 font-semibold text-gray-600">Jenis</th>
               <th className="py-3 px-4 font-semibold text-gray-600 text-right">Jumlah</th>
+              {hasActions && <th className="py-3 px-4 font-semibold text-gray-600 text-center">Aksi</th>}
             </tr>
           </thead>
           <tbody>
             {sortedTransactions.map((t) => (
               <tr 
                 key={t.id} 
-                className={`border-b border-gray-100 transition-colors ${onRowClick ? 'cursor-pointer hover:bg-blue-50' : 'hover:bg-gray-50'}`}
+                className={`border-b border-gray-100 transition-colors group ${onRowClick ? 'cursor-pointer hover:bg-blue-50' : 'hover:bg-gray-50'}`}
                 onClick={() => onRowClick && onRowClick(t)}
               >
                 <td className="py-3 px-4 text-gray-700">{formatDate(t.date)}</td>
@@ -73,11 +78,43 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({ transactions
                 <td className={`py-3 px-4 font-medium text-right ${typeStyles[t.type].text}`}>
                   {t.type === 'income' ? '+' : t.type === 'expense' ? '-' : ''}{formatCurrency(t.amount)}
                 </td>
+                {hasActions && (
+                  <td className="py-3 px-4 text-center">
+                    <div className="flex justify-center space-x-1">
+                      {onEdit && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEdit(t);
+                          }}
+                          className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all transform active:scale-90"
+                          title="Edit Transaksi"
+                        >
+                          <EditIcon className="h-5 w-5" />
+                        </button>
+                      )}
+                      {onDelete && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm('Hapus transaksi ini?')) {
+                              onDelete(t.id);
+                            }
+                          }}
+                          className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all transform active:scale-90"
+                          title="Hapus Transaksi"
+                        >
+                          <TrashIcon className="h-5 w-5" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
              {sortedTransactions.length === 0 && (
                 <tr>
-                    <td colSpan={5} className="text-center py-8 text-gray-500">
+                    <td colSpan={hasActions ? 6 : 5} className="text-center py-8 text-gray-500">
                         Tidak ada transaksi untuk ditampilkan.
                     </td>
                 </tr>

@@ -6,10 +6,19 @@ interface TransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAddTransaction: (transaction: Omit<Transaction, 'id'>) => void;
+  onEditTransaction?: (transaction: Transaction) => void;
   categories: CategoryState;
+  transactionToEdit?: Transaction | null;
 }
 
-export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onClose, onAddTransaction, categories }) => {
+export const TransactionModal: React.FC<TransactionModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onAddTransaction, 
+  onEditTransaction,
+  categories,
+  transactionToEdit
+}) => {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'income' | 'expense' | 'transfer'>('income');
@@ -18,11 +27,25 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
   const [error, setError] = useState('');
 
   useEffect(() => {
-    // Reset category when type changes or categories prop changes
     if (isOpen) {
-        setCategory(categories[type][0] || '');
+      if (transactionToEdit) {
+        setDescription(transactionToEdit.description);
+        setAmount(transactionToEdit.amount.toString());
+        setType(transactionToEdit.type);
+        setDate(transactionToEdit.date);
+        setCategory(transactionToEdit.category);
+      } else {
+        resetForm();
+      }
     }
-  }, [type, isOpen, categories]);
+  }, [isOpen, transactionToEdit]);
+
+  useEffect(() => {
+    // Ensure category is valid for selected type if not editing
+    if (isOpen && !transactionToEdit) {
+      setCategory(categories[type][0] || '');
+    }
+  }, [type, isOpen, categories, transactionToEdit]);
 
   if (!isOpen) return null;
 
@@ -31,7 +54,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
     setAmount('');
     setType('income');
     setDate(new Date().toISOString().split('T')[0]);
-    setCategory(categories[type][0] || '');
+    setCategory(categories['income'][0] || '');
     setError('');
   };
   
@@ -52,13 +75,24 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
       return;
     }
 
-    onAddTransaction({
-      description,
-      amount: amountNumber,
-      type,
-      date,
-      category,
-    });
+    if (transactionToEdit && onEditTransaction) {
+      onEditTransaction({
+        ...transactionToEdit,
+        description,
+        amount: amountNumber,
+        type,
+        date,
+        category,
+      });
+    } else {
+      onAddTransaction({
+        description,
+        amount: amountNumber,
+        type,
+        date,
+        category,
+      });
+    }
     
     handleClose();
   };
@@ -66,7 +100,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
       <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md m-4">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Tambah Transaksi Baru</h2>
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">
+          {transactionToEdit ? 'Edit Transaksi' : 'Tambah Transaksi Baru'}
+        </h2>
         {error && <p className="bg-red-100 text-red-700 p-3 rounded-md mb-4">{error}</p>}
         <form onSubmit={handleSubmit} className="space-y-4">
            <div>
@@ -137,7 +173,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
               Batal
             </button>
             <button type="submit" className="px-6 py-2 text-white bg-blue-600 rounded-lg font-semibold hover:bg-blue-700">
-              Simpan
+              {transactionToEdit ? 'Perbarui' : 'Simpan'}
             </button>
           </div>
         </form>
