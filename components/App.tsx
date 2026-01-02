@@ -33,7 +33,9 @@ const AdminDashboard: React.FC<{
   onAddTransaction: () => void;
   onRestore: (transactions: Transaction[]) => void;
   onViewTransaction: (transaction: Transaction) => void;
-}> = ({ transactions, onAddTransaction, onRestore, onViewTransaction }) => {
+  onEditTransaction: (transaction: Transaction) => void;
+  onDeleteTransaction: (id: string) => void;
+}> = ({ transactions, onAddTransaction, onRestore, onViewTransaction, onEditTransaction, onDeleteTransaction }) => {
 
   const { totalIncome, totalExpense, balance } = React.useMemo(() => {
     let income = 0;
@@ -66,9 +68,9 @@ const AdminDashboard: React.FC<{
           <h1 className="text-3xl font-extrabold text-gray-900">Panel Pengurus</h1>
           <p className="text-gray-500 mt-1">Masjid Adz-Dzurriyyah BKKBN</p>
         </div>
-        <button onClick={onAddTransaction} className="flex items-center justify-center bg-emerald-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all transform active:scale-95">
+        <button onClick={onAddTransaction} className="flex items-center justify-center bg-emerald-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all transform active:scale-95 text-sm uppercase tracking-widest font-black">
             <PlusIcon />
-            Catat Transaksi Baru
+            Tambah Transaksi
         </button>
       </div>
 
@@ -87,15 +89,17 @@ const AdminDashboard: React.FC<{
       <div className="mt-8 mb-12">
         <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
           <span className="w-2 h-6 bg-amber-500 rounded-full mr-3"></span>
-          Riwayat Terakhir
+          Transaksi Terkini
         </h2>
         <TransactionTable 
           transactions={transactions.slice(0, 10)} 
           onRowClick={onViewTransaction}
+          onEdit={onEditTransaction}
+          onDelete={onDeleteTransaction}
         />
       </div>
 
-      <div className="mt-12 opacity-80 hover:opacity-100 transition-opacity">
+      <div className="mt-12">
         <GoogleDriveSync transactions={transactions} setTransactions={()=>{}} onRestore={onRestore} />
       </div>
     </div>
@@ -115,6 +119,7 @@ function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
 
   useEffect(() => {
     const savedTransactions = localStorage.getItem('mosque-transactions');
@@ -146,9 +151,28 @@ function App() {
     const transactionWithId = { ...newTransaction, id: new Date().getTime().toString() };
     setTransactions(prev => [transactionWithId, ...prev]);
   };
+
+  const handleUpdateTransaction = (updatedTransaction: Transaction) => {
+    setTransactions(prev => prev.map(t => t.id === updatedTransaction.id ? updatedTransaction : t));
+    setTransactionToEdit(null);
+  };
+
+  const handleDeleteTransaction = (id: string) => {
+    setTransactions(prev => prev.filter(t => t.id !== id));
+  };
+
+  const handleOpenEditModal = (transaction: Transaction) => {
+    setTransactionToEdit(transaction);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenAddModal = () => {
+    setTransactionToEdit(null);
+    setIsModalOpen(true);
+  };
   
   const handleRestoreFromDrive = (restoredTransactions: Transaction[]) => {
-    if (window.confirm('Ingin memulihkan data? Data saat ini di perangkat ini akan digantikan.')) {
+    if (window.confirm('Ingin memulihkan data? Data saat ini akan digantikan oleh data dari Google Drive.')) {
         setTransactions(restoredTransactions);
     }
   };
@@ -195,9 +219,11 @@ function App() {
     if (currentView === 'dashboard') {
       return <AdminDashboard 
                 transactions={transactions} 
-                onAddTransaction={() => setIsModalOpen(true)}
+                onAddTransaction={handleOpenAddModal}
                 onRestore={handleRestoreFromDrive} 
                 onViewTransaction={(t) => setSelectedTransaction(t)}
+                onEditTransaction={handleOpenEditModal}
+                onDeleteTransaction={handleDeleteTransaction}
              />;
     }
     if (currentView === 'reports') {
@@ -211,13 +237,13 @@ function App() {
     let filteredTransactions: Transaction[] = [];
 
     if (currentView === 'income') {
-      title = 'Laporan Pemasukan';
+      title = 'Manajemen Pemasukan';
       filteredTransactions = transactions.filter(t => t.type === 'income');
     } else if (currentView === 'expense') {
-      title = 'Laporan Pengeluaran';
+      title = 'Manajemen Pengeluaran';
       filteredTransactions = transactions.filter(t => t.type === 'expense');
     } else if (currentView === 'transfer') {
-      title = 'Laporan Transfer Kas';
+      title = 'Manajemen Transfer Kas';
       filteredTransactions = transactions.filter(t => t.type === 'transfer');
     }
 
@@ -225,12 +251,17 @@ function App() {
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
             <h1 className="text-3xl font-extrabold text-gray-900">{title}</h1>
-            <button onClick={() => setIsModalOpen(true)} className="flex items-center justify-center bg-emerald-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-emerald-700 transition-all transform active:scale-95">
+            <button onClick={handleOpenAddModal} className="flex items-center justify-center bg-emerald-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-emerald-700 transition-all transform active:scale-95 text-sm uppercase tracking-widest font-black">
                 <PlusIcon />
                 Tambah Data
             </button>
         </div>
-        <TransactionTable transactions={filteredTransactions} onRowClick={(t) => setSelectedTransaction(t)} />
+        <TransactionTable 
+          transactions={filteredTransactions} 
+          onRowClick={(t) => setSelectedTransaction(t)} 
+          onDelete={handleDeleteTransaction}
+          onEdit={handleOpenEditModal}
+        />
       </div>
     );
   };
@@ -246,7 +277,9 @@ function App() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onAddTransaction={handleAddTransaction}
+        onEditTransaction={handleUpdateTransaction}
         categories={categories}
+        transactionToEdit={transactionToEdit}
       />
 
       <TransactionDetailModal 

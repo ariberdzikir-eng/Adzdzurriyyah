@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Transaction } from '../types';
 import { API_KEY, CLIENT_ID, SCOPES, BACKUP_FILE_NAME } from '../googleConfig';
@@ -28,12 +29,11 @@ export const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ transactions, 
       const client = window.google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: SCOPES,
-        callback: '', // Callback is handled by the promise flow
+        callback: '', 
       });
       setTokenClient(client);
     };
 
-    // Wait for both scripts to be loaded
     const checkScripts = setInterval(() => {
         if (window.gapi && window.google) {
             clearInterval(checkScripts);
@@ -117,7 +117,7 @@ export const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ transactions, 
         if (err) {
             console.error(err);
             setSyncState('error');
-            setSyncMessage('Gagal melakukan backup. Lihat konsol untuk detail.');
+            setSyncMessage('Gagal melakukan backup. Silakan coba lagi.');
         } else {
             setSyncState('success');
             setSyncMessage(`Data berhasil dicadangkan pada ${new Date().toLocaleString('id-ID')}`);
@@ -132,7 +132,7 @@ export const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ transactions, 
     const fileId = await findFileId();
     if (!fileId) {
         setSyncState('error');
-        setSyncMessage('File backup tidak ditemukan di Google Drive Anda.');
+        setSyncMessage('File backup tidak ditemukan di Google Drive ini.');
         return;
     }
 
@@ -152,45 +152,56 @@ export const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ transactions, 
     } catch (err) {
         console.error(err);
         setSyncState('error');
-        setSyncMessage('Gagal memulihkan data. Lihat konsol untuk detail.');
+        setSyncMessage('Gagal memulihkan data.');
     }
   };
 
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-md mt-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-2">Sinkronisasi Google Drive</h2>
-        <p className="text-sm text-gray-500 mb-4">Simpan data transaksi Anda dengan aman di Google Drive.</p>
+    <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 mt-6 overflow-hidden relative">
+        <div className="absolute top-0 right-0 p-4 opacity-5">
+            <svg className="h-24 w-24" fill="currentColor" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+        </div>
+        
+        <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase mb-2">Sinkronisasi Awan</h2>
+        <div className="bg-amber-50 border border-amber-100 p-3 rounded-2xl mb-6">
+            <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest leading-relaxed">
+                PENTING: Gunakan akun pengurus <span className="underline decoration-2">ariberdzikir@gmail.com</span> agar sinkronisasi data tetap terjaga pada satu penyimpanan.
+            </p>
+        </div>
         
         {authState !== 'authenticated' && (
             <button 
                 onClick={handleAuthClick}
                 disabled={authState === 'pending' || !tokenClient}
-                className="w-full flex items-center justify-center bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 transition-colors disabled:bg-gray-400"
+                className="w-full flex items-center justify-center gap-3 bg-slate-800 text-white font-black py-4 px-4 rounded-2xl shadow-xl shadow-slate-100 hover:bg-slate-900 transition-all disabled:bg-slate-300 uppercase tracking-widest text-[10px]"
             >
-                {authState === 'pending' ? 'Menghubungkan...' : 'Login dengan Google untuk Sinkronisasi'}
+                {authState === 'pending' ? 'Menghubungkan...' : 'Hubungkan ke Google Drive'}
             </button>
         )}
 
         {authState === 'authenticated' && (
             <div className="space-y-4">
-                <p className="text-green-600 font-medium text-center bg-green-50 p-3 rounded-lg">Terhubung dengan Google Drive.</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <button onClick={handleBackup} disabled={syncState === 'syncing'} className="bg-green-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-700 transition-colors disabled:bg-gray-400">
-                        {syncState === 'syncing' ? 'Memproses...' : 'Backup ke Google Drive'}
+                <div className="flex items-center gap-3 bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
+                    <div className="bg-emerald-500 rounded-full p-1"><svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg></div>
+                    <p className="text-[10px] text-emerald-700 font-black uppercase tracking-widest">Akun Terhubung</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                    <button onClick={handleBackup} disabled={syncState === 'syncing'} className="bg-slate-800 text-white font-black py-4 px-2 rounded-2xl hover:bg-slate-900 transition-all disabled:bg-slate-200 uppercase tracking-widest text-[10px]">
+                        {syncState === 'syncing' ? '...' : 'Backup'}
                     </button>
-                    <button onClick={handleRestore} disabled={syncState === 'syncing'} className="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-600 transition-colors disabled:bg-gray-400">
-                        {syncState === 'syncing' ? 'Memproses...' : 'Restore dari Google Drive'}
+                    <button onClick={handleRestore} disabled={syncState === 'syncing'} className="bg-slate-100 text-slate-800 font-black py-4 px-2 rounded-2xl hover:bg-slate-200 transition-all disabled:bg-slate-200 uppercase tracking-widest text-[10px]">
+                        {syncState === 'syncing' ? '...' : 'Restore'}
                     </button>
                 </div>
             </div>
         )}
 
         {syncMessage && (
-            <p className={`mt-4 text-center text-sm font-medium p-2 rounded-md ${
-                syncState === 'success' ? 'bg-green-100 text-green-800' : 
-                syncState === 'error' ? 'bg-red-100 text-red-800' :
-                'bg-blue-100 text-blue-800'
+            <p className={`mt-6 text-center text-[10px] font-black uppercase tracking-widest p-3 rounded-xl ${
+                syncState === 'success' ? 'bg-emerald-50 text-emerald-700' : 
+                syncState === 'error' ? 'bg-rose-50 text-rose-700' :
+                'bg-sky-50 text-sky-700'
             }`}>
                 {syncMessage}
             </p>

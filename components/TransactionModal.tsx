@@ -41,7 +41,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   }, [isOpen, transactionToEdit]);
 
   useEffect(() => {
-    // Ensure category is valid for selected type if not editing
+    // Jika ganti tipe dan bukan sedang edit, set kategori default pertama
     if (isOpen && !transactionToEdit) {
       setCategory(categories[type][0] || '');
     }
@@ -66,7 +66,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!description || !amount || !date || !category) {
-      setError('Semua kolom harus diisi.');
+      setError('Harap lengkapi semua kolom.');
       return;
     }
     const amountNumber = parseFloat(amount);
@@ -98,45 +98,55 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center">
-      <div className="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md m-4">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">
-          {transactionToEdit ? 'Edit Transaksi' : 'Tambah Transaksi Baru'}
-        </h2>
-        {error && <p className="bg-red-100 text-red-700 p-3 rounded-md mb-4">{error}</p>}
-        <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
+      <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-md transform transition-all">
+        <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase">
+            {transactionToEdit ? 'Edit Transaksi' : 'Catat Transaksi'}
+            </h2>
+            <button onClick={handleClose} className="text-slate-400 hover:text-slate-600">
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+        </div>
+
+        {error && <p className="bg-rose-50 text-rose-600 p-3 rounded-xl mb-4 text-xs font-bold border border-rose-100">{error}</p>}
+        
+        <form onSubmit={handleSubmit} className="space-y-5">
            <div>
-            <label className="block text-gray-700 font-medium mb-2">Jenis Transaksi</label>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Jenis Transaksi</label>
             <div className="grid grid-cols-3 gap-2">
-              <button type="button" onClick={() => setType('income')} className={`py-2 px-4 rounded-lg font-semibold text-sm transition-colors ${type === 'income' ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+              <button type="button" onClick={() => setType('income')} className={`py-2 px-1 rounded-xl font-bold text-[10px] uppercase tracking-tighter transition-all ${type === 'income' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
                 Pemasukan
               </button>
-              <button type="button" onClick={() => setType('expense')} className={`py-2 px-4 rounded-lg font-semibold text-sm transition-colors ${type === 'expense' ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
+              <button type="button" onClick={() => setType('expense')} className={`py-2 px-1 rounded-xl font-bold text-[10px] uppercase tracking-tighter transition-all ${type === 'expense' ? 'bg-rose-600 text-white shadow-lg shadow-rose-100' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
                 Pengeluaran
               </button>
-               <button type="button" onClick={() => setType('transfer')} className={`py-2 px-4 rounded-lg font-semibold text-sm transition-colors ${type === 'transfer' ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}>
-                Transfer Kas
+               <button type="button" onClick={() => setType('transfer')} className={`py-2 px-1 rounded-xl font-bold text-[10px] uppercase tracking-tighter transition-all ${type === 'transfer' ? 'bg-sky-600 text-white shadow-lg shadow-sky-100' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                Transfer
               </button>
             </div>
           </div>
+
           <div>
-            <label htmlFor="description" className="block text-gray-700 font-medium mb-2">Deskripsi</label>
+            <label htmlFor="description" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Deskripsi / Keperluan</label>
             <input
               type="text"
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-400 focus:bg-white transition-all text-sm font-semibold"
+              placeholder="Contoh: Infaq Jumat"
               required
             />
           </div>
+
            <div>
-            <label htmlFor="category" className="block text-gray-700 font-medium mb-2">Kategori</label>
+            <label htmlFor="category" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Kategori</label>
             <select
                 id="category"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-400 focus:bg-white transition-all text-sm font-semibold appearance-none"
                 required
             >
                 {categories[type].map(cat => (
@@ -144,36 +154,39 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 ))}
             </select>
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
-                <label htmlFor="amount" className="block text-gray-700 font-medium mb-2">Jumlah (IDR)</label>
+                <label htmlFor="amount" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Jumlah (Rp)</label>
                 <input
                 type="number"
                 id="amount"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-400 focus:bg-white transition-all text-sm font-bold"
+                placeholder="0"
                 required
                 />
             </div>
             <div>
-                <label htmlFor="date" className="block text-gray-700 font-medium mb-2">Tanggal</label>
+                <label htmlFor="date" className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Tanggal</label>
                 <input
                 type="date"
                 id="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-400 focus:bg-white transition-all text-sm font-semibold"
                 required
                 />
             </div>
           </div>
-          <div className="flex justify-end space-x-4 pt-4">
-            <button type="button" onClick={handleClose} className="px-6 py-2 text-gray-700 bg-gray-200 rounded-lg font-semibold hover:bg-gray-300">
+
+          <div className="flex gap-3 pt-4">
+            <button type="button" onClick={handleClose} className="flex-1 py-4 text-slate-500 font-bold uppercase tracking-widest text-[10px] hover:bg-slate-50 rounded-2xl transition-all">
               Batal
             </button>
-            <button type="submit" className="px-6 py-2 text-white bg-blue-600 rounded-lg font-semibold hover:bg-blue-700">
-              {transactionToEdit ? 'Perbarui' : 'Simpan'}
+            <button type="submit" className="flex-[2] py-4 text-white bg-slate-800 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-slate-200 hover:bg-slate-900 transition-all transform active:scale-95">
+              {transactionToEdit ? 'Simpan Perubahan' : 'Tambah Transaksi'}
             </button>
           </div>
         </form>

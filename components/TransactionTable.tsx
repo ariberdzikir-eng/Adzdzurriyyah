@@ -47,48 +47,47 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({ transactions
 
   return (
     <div className="bg-white p-6 rounded-2xl shadow-md mt-6">
-      <h2 className="text-xl font-bold text-gray-800 mb-4">Riwayat Transaksi</h2>
       <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead className="border-b-2 border-gray-200">
+        <table className="w-full text-left border-collapse">
+          <thead className="border-b-2 border-gray-100">
             <tr>
-              <th className="py-3 px-4 font-semibold text-gray-600">Tanggal</th>
-              <th className="py-3 px-4 font-semibold text-gray-600">Deskripsi</th>
-              <th className="py-3 px-4 font-semibold text-gray-600">Kategori</th>
-              <th className="py-3 px-4 font-semibold text-gray-600">Jenis</th>
-              <th className="py-3 px-4 font-semibold text-gray-600 text-right">Jumlah</th>
-              {hasActions && <th className="py-3 px-4 font-semibold text-gray-600 text-center">Aksi</th>}
+              <th className="py-4 px-4 font-bold text-gray-400 uppercase text-xs tracking-widest">Tanggal</th>
+              <th className="py-4 px-4 font-bold text-gray-400 uppercase text-xs tracking-widest">Deskripsi</th>
+              <th className="py-4 px-4 font-bold text-gray-400 uppercase text-xs tracking-widest">Kategori</th>
+              <th className="py-4 px-4 font-bold text-gray-400 uppercase text-xs tracking-widest">Jenis</th>
+              <th className="py-4 px-4 font-bold text-gray-400 uppercase text-xs tracking-widest text-right">Jumlah</th>
+              {hasActions && <th className="py-4 px-4 font-bold text-gray-400 uppercase text-xs tracking-widest text-center">Aksi</th>}
             </tr>
           </thead>
           <tbody>
             {sortedTransactions.map((t) => (
               <tr 
                 key={t.id} 
-                className={`border-b border-gray-100 transition-colors group ${onRowClick ? 'cursor-pointer hover:bg-blue-50' : 'hover:bg-gray-50'}`}
+                className={`border-b border-gray-50 transition-colors group ${onRowClick ? 'cursor-pointer hover:bg-slate-50' : ''}`}
                 onClick={() => onRowClick && onRowClick(t)}
               >
-                <td className="py-3 px-4 text-gray-700">{formatDate(t.date)}</td>
-                <td className="py-3 px-4 text-gray-700 font-medium">{t.description}</td>
-                <td className="py-3 px-4 text-gray-500">{t.category}</td>
-                <td className="py-3 px-4">
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${typeStyles[t.type].badge}`}>
+                <td className="py-4 px-4 text-gray-600 text-sm">{formatDate(t.date)}</td>
+                <td className="py-4 px-4 text-gray-800 font-semibold">{t.description}</td>
+                <td className="py-4 px-4 text-gray-500 text-sm">{t.category}</td>
+                <td className="py-4 px-4">
+                  <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${typeStyles[t.type].badge}`}>
                     {typeStyles[t.type].label}
                   </span>
                 </td>
-                <td className={`py-3 px-4 font-medium text-right ${typeStyles[t.type].text}`}>
+                <td className={`py-4 px-4 font-bold text-right ${typeStyles[t.type].text}`}>
                   {t.type === 'income' ? '+' : t.type === 'expense' ? '-' : ''}{formatCurrency(t.amount)}
                 </td>
                 {hasActions && (
-                  <td className="py-3 px-4 text-center">
-                    <div className="flex justify-center space-x-1">
+                  <td className="py-4 px-4 text-center">
+                    <div className="flex justify-center space-x-2">
                       {onEdit && (
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
                             onEdit(t);
                           }}
-                          className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all transform active:scale-90"
-                          title="Edit Transaksi"
+                          className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all transform active:scale-90"
+                          title="Edit"
                         >
                           <EditIcon className="h-5 w-5" />
                         </button>
@@ -97,12 +96,12 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({ transactions
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (window.confirm('Hapus transaksi ini?')) {
+                            if (window.confirm('Hapus transaksi ini? Tindakan ini tidak dapat dibatalkan.')) {
                               onDelete(t.id);
                             }
                           }}
-                          className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all transform active:scale-90"
-                          title="Hapus Transaksi"
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all transform active:scale-90"
+                          title="Hapus"
                         >
                           <TrashIcon className="h-5 w-5" />
                         </button>
@@ -114,8 +113,8 @@ export const TransactionTable: React.FC<TransactionTableProps> = ({ transactions
             ))}
              {sortedTransactions.length === 0 && (
                 <tr>
-                    <td colSpan={hasActions ? 6 : 5} className="text-center py-8 text-gray-500">
-                        Tidak ada transaksi untuk ditampilkan.
+                    <td colSpan={hasActions ? 6 : 5} className="text-center py-12 text-gray-400 italic">
+                        Belum ada data transaksi untuk ditampilkan.
                     </td>
                 </tr>
             )}
