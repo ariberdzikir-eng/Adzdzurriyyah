@@ -125,7 +125,7 @@ function App() {
 
   // Filters state
   const [filterDate, setFilterDate] = useState('');
-  const [filterMonth, setFilterMonth] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const savedTransactions = localStorage.getItem('mosque-transactions');
@@ -192,6 +192,12 @@ function App() {
     setIsLoggedIn(false);
     setCurrentView('dashboard');
   };
+
+  // Reset filters when changing views
+  useEffect(() => {
+    setFilterDate('');
+    setSearchQuery('');
+  }, [currentView]);
 
   // 1. PUBLIC VIEW (Default)
   if (!isLoggedIn && !showLogin) {
@@ -260,8 +266,11 @@ function App() {
     const filteredTransactions = transactions.filter(t => {
       const isType = t.type === type;
       const matchesDate = filterDate ? t.date === filterDate : true;
-      const matchesMonth = filterMonth ? t.date.startsWith(filterMonth) : true;
-      return isType && matchesDate && matchesMonth;
+      const matchesSearch = searchQuery 
+        ? t.description.toLowerCase().includes(searchQuery.toLowerCase()) || 
+          t.category.toLowerCase().includes(searchQuery.toLowerCase())
+        : true;
+      return isType && matchesDate && matchesSearch;
     });
 
     return (
@@ -277,35 +286,37 @@ function App() {
             </button>
         </div>
 
-        {/* Filter Toolbar */}
+        {/* Improved Search & Filter Toolbar */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6 flex flex-wrap items-end gap-4">
+            <div className="flex-[2] min-w-[280px]">
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Cari Transaksi</label>
+                <div className="relative">
+                  <input 
+                      type="text" 
+                      placeholder="Cari deskripsi atau kategori..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                  />
+                  <div className="absolute left-3 top-2.5 text-gray-400">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                </div>
+            </div>
             <div className="flex-1 min-w-[200px]">
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Pilih Hari (Tanggal)</label>
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Filter Hari (Tanggal)</label>
                 <input 
                     type="date" 
                     value={filterDate}
-                    onChange={(e) => {
-                        setFilterDate(e.target.value);
-                        setFilterMonth(''); // Reset month when date is selected
-                    }}
+                    onChange={(e) => setFilterDate(e.target.value)}
                     className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
                 />
             </div>
-            <div className="flex-1 min-w-[200px]">
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Pilih Bulan & Tahun</label>
-                <input 
-                    type="month" 
-                    value={filterMonth}
-                    onChange={(e) => {
-                        setFilterMonth(e.target.value);
-                        setFilterDate(''); // Reset date when month is selected
-                    }}
-                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
-                />
-            </div>
-            {(filterDate || filterMonth) && (
+            {(filterDate || searchQuery) && (
                 <button 
-                    onClick={() => { setFilterDate(''); setFilterMonth(''); }}
+                    onClick={() => { setFilterDate(''); setSearchQuery(''); }}
                     className="flex items-center gap-2 px-6 py-2 bg-rose-50 text-rose-600 rounded-xl font-bold hover:bg-rose-100 transition-all text-sm h-[42px]"
                 >
                     <TrashIcon className="h-4 w-4" />
