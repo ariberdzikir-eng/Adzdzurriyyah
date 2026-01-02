@@ -9,167 +9,133 @@ interface SimpleCloudSyncProps {
 }
 
 export const SimpleCloudSync: React.FC<SimpleCloudSyncProps> = ({ transactions, onRestore }) => {
-  const [syncId, setSyncId] = useState(localStorage.getItem('mosque_sync_id') || '');
-  const [status, setStatus] = useState<'offline' | 'online' | 'syncing' | 'error'>(syncId ? 'online' : 'offline');
-  const [lastSync, setLastSync] = useState<string | null>(null);
-  const [isEditing, setIsEditing] = useState(!syncId);
-  const [tempId, setTempId] = useState(syncId);
-  const [errorMsg, setErrorMsg] = useState('');
-
+  const [groupName, setGroupName] = useState(localStorage.getItem('mosque_group_name') || '');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [networkOk, setNetworkOk] = useState<boolean | null>(null);
+  
   const transactionsRef = useRef(transactions);
   useEffect(() => { transactionsRef.current = transactions; }, [transactions]);
 
-  // Fungsi Simpan (Push)
-  const handlePush = async (silent = false) => {
-    if (!syncId) return;
-    if (!silent) setStatus('syncing');
+  // 1. CEK JARINGAN & AUTO-PULL
+  useEffect(() => {
+    cloudSync.checkNetwork().then(setNetworkOk);
     
-    const success = await cloudSync.push(syncId, transactionsRef.current);
-    if (success) {
-      setLastSync(new Date().toLocaleTimeString('id-ID'));
-      setStatus('online');
-      window.dispatchEvent(new CustomEvent('mosque-cloud-status', { detail: 'online' }));
-    } else if (!silent) {
-      setStatus('error');
-      setErrorMsg('Gagal mengirim data. Jaringan mungkin memblokir koneksi.');
+    // Jika ada nama grup, otomatis tarik data terbaru setiap 30 detik
+    if (groupName) {
+      const interval = setInterval(autoPull, 30000);
+      return () => clearInterval(interval);
     }
-  };
+  }, [groupName]);
 
-  // Fungsi Ambil (Pull)
-  const handlePull = async (silent = false) => {
-    if (!syncId) return;
-    if (!silent) setStatus('syncing');
-    
-    const { data, status: httpStatus } = await cloudSync.pull(syncId);
-    if (httpStatus === 200 && data) {
+  const autoPull = async () => {
+    const { data } = await cloudSync.pull(groupName);
+    if (data && JSON.stringify(data) !== JSON.stringify(transactionsRef.current)) {
       onRestore(data);
-      setLastSync(new Date().toLocaleTimeString('id-ID'));
-      setStatus('online');
-      window.dispatchEvent(new CustomEvent('mosque-cloud-status', { detail: 'online' }));
-    } else if (httpStatus === 404) {
-      // ID Baru: Langsung push data lokal yang ada
-      handlePush(silent);
-    } else if (!silent) {
-      setStatus('error');
-      setErrorMsg('Gagal mengambil data dari cloud.');
     }
   };
 
-  // Auto-Sync saat data lokal berubah
-  useEffect(() => {
-    const handleDataChanged = () => {
-        if (syncId && status === 'online') {
-            const timer = setTimeout(() => handlePush(true), 1500);
-            return () => clearTimeout(timer);
+  const handleSaveGroup = () => {
+    if (!groupName) return;
+    localStorage.setItem('mosque_group_name', groupName);
+    handlePush();
+    alert(`Grup "${groupName}" Aktif! Gunakan nama yang sama di HP pengurus lain.`);
+  };
+
+  const handlePush = async () => {
+    setIsSyncing(true);
+    const ok = await cloudSync.push(groupName, transactionsRef.current);
+    setIsSyncing(false);
+    if (ok) alert("Data berhasil disimpan ke Cloud!");
+    else alert("Gagal! Sepertinya WiFi kantor memblokir akses Cloud. Gunakan tombol 'Kirim via WA'.");
+  };
+
+  // 2. FITUR KIRIM WA (Paling Simpel - Seperti Kirim Foto)
+  const shareToWA = async () => {
+    const dataStr = JSON.stringify(transactions);
+    const file = new File([dataStr], `Data_Masjid_${new Date().toLocaleDateString('id-ID')}.json`, { type: 'application/json' });
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: 'Data Keuangan Masjid',
+        });
+      } catch (e) { console.log('Share cancelled'); }
+    } else {
+      // Fallback download jika di laptop
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      a.click();
+    }
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string);
+        if (Array.isArray(data)) {
+          onRestore(data);
+          alert("Berhasil! Data dari WA telah dimuat.");
         }
+      } catch (err) { alert("File tidak valid."); }
     };
-    window.addEventListener('mosque-data-changed', handleDataChanged);
-    return () => window.removeEventListener('mosque-data-changed', handleDataChanged);
-  }, [syncId, status]);
-
-  // Cek update dari cloud setiap 30 detik
-  useEffect(() => {
-    if (!syncId) return;
-    const interval = setInterval(() => handlePull(true), 30000);
-    return () => clearInterval(interval);
-  }, [syncId]);
-
-  const handleConnect = async () => {
-    const cleanId = tempId.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
-    if (!cleanId) {
-        alert("Masukkan ID minimal 5 karakter.");
-        return;
-    }
-    
-    setStatus('syncing');
-    setErrorMsg('');
-    
-    // Simpan ID
-    localStorage.setItem('mosque_sync_id', cleanId);
-    setSyncId(cleanId);
-    setIsEditing(false);
-    
-    // Coba tarik data atau buat data baru di cloud
-    await handlePull();
-  };
-
-  const generateRandomId = () => {
-    const random = Math.random().toString(36).substring(2, 8);
-    setTempId(`masjid-${random}`);
+    reader.readAsText(file);
   };
 
   return (
-    <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 mt-6 relative overflow-hidden transition-all">
-        <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-black text-slate-800 uppercase italic tracking-tight">Cloud Live Sync v3</h2>
-            {status === 'online' && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 animate-pulse">
-                    <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
-                    <span className="text-[10px] font-bold uppercase tracking-widest">Tersambung</span>
-                </div>
-            )}
+    <div className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 mt-10">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-lg font-black text-slate-800 uppercase italic">Sinkronisasi Grup</h2>
+        <div className={`w-3 h-3 rounded-full ${networkOk ? 'bg-emerald-500' : 'bg-rose-500'}`} title={networkOk ? 'Cloud Ready' : 'WiFi Kantor Memblokir'}></div>
+      </div>
+
+      <div className="space-y-6">
+        {/* Input Nama Grup */}
+        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Nama Grup Pengurus</label>
+          <div className="flex gap-2">
+            <input 
+              type="text" 
+              placeholder="Contoh: masjid-dzurriyyah" 
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value.toLowerCase().replace(/\s/g, '-'))}
+              className="flex-1 bg-white border border-slate-200 px-4 py-2 rounded-xl font-bold text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button onClick={handleSaveGroup} className="bg-slate-800 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">Set</button>
+          </div>
+          <p className="text-[9px] text-slate-400 mt-2">Data akan tersinkron otomatis bagi siapa pun yang menggunakan nama grup ini.</p>
         </div>
 
-        {isEditing ? (
-            <div className="space-y-4 animate-in slide-in-from-bottom-2 duration-300">
-                <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
-                    <p className="text-[11px] text-blue-700 font-bold uppercase tracking-wide">PENGATURAN KONEKSI</p>
-                    <p className="text-[10px] text-blue-600 mt-1">Ketikkan ID unik (bebas) atau klik tombol acak. Bagikan ID ini ke pengurus lain.</p>
-                </div>
-                
-                <div className="flex gap-2">
-                    <input 
-                        type="text" 
-                        placeholder="Contoh: adz-dzurriyyah-2024"
-                        value={tempId}
-                        onChange={(e) => setTempId(e.target.value)}
-                        className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-bold text-sm"
-                    />
-                    <button onClick={handleConnect} className="px-6 py-3 bg-emerald-600 text-white font-black rounded-xl text-xs uppercase tracking-widest shadow-lg shadow-emerald-50 transform active:scale-95 transition-all">Hubungkan</button>
-                </div>
-                <button onClick={generateRandomId} className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline">Gunakan ID Acak</button>
-            </div>
-        ) : (
-            <div className="space-y-5 animate-in fade-in duration-500">
-                <div className="bg-slate-50 p-6 rounded-2xl flex justify-between items-center border border-slate-100">
-                    <div>
-                        <p className="text-[10px] text-slate-400 font-black uppercase mb-1 tracking-widest">ID AKTIF SINKRONISASI</p>
-                        <p className="font-black text-slate-800 text-2xl tracking-tight">{syncId}</p>
-                    </div>
-                    <button onClick={() => setIsEditing(true)} className="text-[10px] font-black text-blue-600 uppercase hover:text-blue-800 tracking-widest bg-blue-50 px-4 py-2 rounded-xl">Ganti ID</button>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                    <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Waktu Update Terakhir</p>
-                        <p className="text-sm font-bold text-slate-600">{lastSync || 'Baru Saja'}</p>
-                    </div>
-                    <div className="flex gap-2">
-                        <button onClick={() => handlePush()} className="p-4 bg-slate-800 text-white rounded-2xl hover:bg-slate-900 shadow-lg shadow-slate-100 transition-all flex items-center gap-2 font-black text-[10px] uppercase tracking-widest">
-                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                            Simpan Manual
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
+        {/* Action Buttons */}
+        <div className="grid grid-cols-2 gap-3">
+          <button 
+            onClick={handlePush} 
+            disabled={!groupName || isSyncing}
+            className={`py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 ${isSyncing ? 'bg-slate-100 text-slate-400' : 'bg-blue-600 text-white shadow-blue-100'}`}
+          >
+            {isSyncing ? 'Menyimpan...' : 'Simpan ke Cloud'}
+          </button>
 
-        {status === 'error' && (
-            <div className="mt-6 bg-rose-50 border border-rose-100 p-4 rounded-2xl space-y-2">
-                <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest text-center">{errorMsg}</p>
-                <div className="flex justify-center gap-2">
-                    <button onClick={() => handlePull()} className="text-[10px] font-black bg-rose-600 text-white px-4 py-2 rounded-lg uppercase tracking-widest">Coba Lagi</button>
-                    <button onClick={() => window.location.reload()} className="text-[10px] font-black bg-slate-200 text-slate-600 px-4 py-2 rounded-lg uppercase tracking-widest">Refresh App</button>
-                </div>
-            </div>
-        )}
+          <button 
+            onClick={shareToWA} 
+            className="bg-emerald-600 text-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-100 active:scale-95 flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.319 1.592 5.448 0 9.886-4.438 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884 0 2.225.569 3.961 1.694 5.854l-.993 3.629 3.861-.982zM16.598 14.37c-.312-.156-1.85-.912-2.134-1.017-.286-.105-.494-.156-.701.156-.207.312-.803 1.017-.984 1.223-.18.207-.362.233-.674.078-.312-.156-1.316-.484-2.508-1.548-.928-.827-1.554-1.849-1.735-2.162-.18-.312-.019-.481.137-.636.141-.141.312-.365.468-.546.156-.182.208-.312.312-.52.105-.207.052-.39-.026-.546-.078-.156-.701-1.693-.961-2.317-.253-.608-.51-.524-.701-.534-.18-.01-.39-.01-.598-.01-.207 0-.546.078-.831.39-.286.312-1.091 1.067-1.091 2.6 0 1.533 1.117 3.016 1.273 3.223.156.207 2.197 3.355 5.323 4.706.743.322 1.325.515 1.777.659.748.237 1.428.204 1.967.123.6-.091 1.85-.756 2.108-1.485.257-.728.257-1.352.181-1.485-.077-.13-.284-.208-.596-.364z"/></svg>
+            Kirim ke WA
+          </button>
+        </div>
 
-        {status === 'syncing' && (
-            <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] flex flex-col items-center justify-center z-10 animate-in fade-in">
-                <div className="w-10 h-10 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin mb-3"></div>
-                <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">Sinkronisasi Ke Awan...</p>
-            </div>
-        )}
+        {/* Tombol Terima Data dari WA */}
+        <label className="block w-full text-center py-3 bg-slate-100 text-slate-600 rounded-xl text-[9px] font-black uppercase tracking-widest cursor-pointer border border-dashed border-slate-300">
+          Muat Data dari File WA
+          <input type="file" accept=".json" onChange={handleImportFile} className="hidden" />
+        </label>
+      </div>
     </div>
   );
 };

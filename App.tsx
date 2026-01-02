@@ -5,7 +5,6 @@ import { INITIAL_TRANSACTIONS, INCOME_CATEGORIES, EXPENSE_CATEGORIES, TRANSFER_C
 import { Sidebar } from './components/Sidebar';
 import { StatCard } from './components/StatCard';
 import { FinancialChart } from './components/FinancialChart';
-import { CategoryPieChart } from './components/CategoryPieChart';
 import { TransactionTable } from './components/TransactionTable';
 import { TransactionModal } from './components/TransactionModal';
 import { TransactionDetailModal } from './components/TransactionDetailModal';
@@ -76,12 +75,6 @@ const AdminDashboard: React.FC<{
                 Sistem Online
               </span>
             )}
-            {cloudStatus === 'syncing' && (
-              <span className="flex items-center gap-1.5 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-200">
-                <span className="w-2 h-2 bg-blue-500 rounded-full animate-spin"></span>
-                Sinkronisasi...
-              </span>
-            )}
           </div>
           <p className="text-gray-500 mt-1">Masjid Adz-Dzurriyyah BKKBN</p>
         </div>
@@ -143,6 +136,35 @@ function App() {
   const [filterDate, setFilterDate] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // DETEKSI MAGIC LINK PADA SAAT LOAD
+  useEffect(() => {
+    const checkMagicLink = () => {
+        const hash = window.location.hash;
+        if (hash && hash.startsWith('#data=')) {
+            try {
+                const encodedData = hash.replace('#data=', '');
+                const decodedStr = decodeURIComponent(escape(atob(encodedData)));
+                const newData = JSON.parse(decodedStr);
+                
+                if (Array.isArray(newData)) {
+                    const confirmSync = window.confirm(
+                        `SINKRONISASI MAGIC LINK TERDETEKSI!\n\nAda ${newData.length} data transaksi baru dari pengurus lain.\nApakah Anda ingin memperbarui laporan Anda dengan data ini?`
+                    );
+                    if (confirmSync) {
+                        setTransactions(newData);
+                        // Bersihkan hash agar tidak muncul lagi saat refresh
+                        window.history.replaceState(null, "", window.location.pathname);
+                        alert("Berhasil! Data Anda telah disinkronkan.");
+                    }
+                }
+            } catch (e) {
+                console.error("Magic link error", e);
+            }
+        }
+    };
+    checkMagicLink();
+  }, []);
+
   // Initial load
   useEffect(() => {
     const savedTransactions = localStorage.getItem('mosque-transactions');
@@ -162,7 +184,7 @@ function App() {
     }
   }, []);
 
-  // Save to localStorage whenever data changes
+  // Save to localStorage
   useEffect(() => {
     localStorage.setItem('mosque-transactions', JSON.stringify(transactions));
   }, [transactions]);
@@ -171,34 +193,22 @@ function App() {
     localStorage.setItem('mosque-categories', JSON.stringify(categories));
   }, [categories]);
 
-  // Trigger manual & automatic backup event
-  const triggerCloudBackup = useCallback(() => {
-    const event = new CustomEvent('mosque-data-changed');
-    window.dispatchEvent(event);
-  }, []);
-
   const handleAddTransaction = (newTransaction: Omit<Transaction, 'id'>) => {
     const transactionWithId = { ...newTransaction, id: new Date().getTime().toString() };
     setTransactions(prev => [transactionWithId, ...prev]);
-    triggerCloudBackup();
   };
 
   const handleUpdateTransaction = (updatedTransaction: Transaction) => {
     setTransactions(prev => prev.map(t => t.id === updatedTransaction.id ? updatedTransaction : t));
     setTransactionToEdit(null);
-    triggerCloudBackup();
   };
 
   const handleDeleteTransaction = (id: string) => {
     setTransactions(prev => prev.filter(t => t.id !== id));
-    triggerCloudBackup();
   };
 
   const handleRestoreData = (restoredTransactions: Transaction[]) => {
-    if (JSON.stringify(restoredTransactions) !== JSON.stringify(transactions)) {
-        setTransactions(restoredTransactions);
-    }
-    setCloudStatus('online');
+    setTransactions(restoredTransactions);
   };
 
   const handleLogin = () => {
@@ -219,12 +229,6 @@ function App() {
     window.addEventListener('mosque-cloud-status', handleStatus);
     return () => window.removeEventListener('mosque-cloud-status', handleStatus);
   }, []);
-
-  // Reset filters when changing views
-  useEffect(() => {
-    setFilterDate('');
-    setSearchQuery('');
-  }, [currentView]);
 
   if (!isLoggedIn && !showLogin) {
     return <PublicDashboard transactions={transactions} onAdminLoginClick={() => setShowLogin(true)} />;
@@ -278,10 +282,6 @@ function App() {
         <div className="flex flex-col lg:flex-row justify-between lg:items-center mb-8 gap-4">
             <div>
                 <h1 className="text-3xl font-extrabold text-gray-900">{title}</h1>
-                <p className="text-gray-500 text-sm mt-1">
-                    Daftar rekaman {title.toLowerCase()}
-                    {cloudStatus === 'online' && <span className="ml-2 text-emerald-500 font-bold animate-pulse">● Live Sync</span>}
-                </p>
             </div>
             <button onClick={handleOpenAddModal} className="flex items-center justify-center bg-emerald-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-emerald-700 transition-all transform active:scale-95 text-sm uppercase tracking-widest font-black shrink-0">
                 <PlusIcon /> Tambah Data
@@ -297,9 +297,6 @@ function App() {
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Filter Hari</label>
                 <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold" />
             </div>
-            {(filterDate || searchQuery) && (
-                <button onClick={() => { setFilterDate(''); setSearchQuery(''); }} className="flex items-center gap-2 px-6 py-2 bg-rose-50 text-rose-600 rounded-xl font-bold hover:bg-rose-100 transition-all text-sm h-[42px]"><TrashIcon className="h-4 w-4" /> Reset</button>
-            )}
         </div>
         <TransactionTable transactions={filteredTransactions} onRowClick={(t) => setSelectedTransaction(t)} onDelete={handleDeleteTransaction} onEdit={handleOpenEditModal} />
       </div>
