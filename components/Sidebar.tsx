@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { HomeIcon, ReportsIcon, LogoutIcon, IncomeIcon, ExpenseIcon, TransferIcon, SettingsIcon } from './icons';
+import { HomeIcon, ReportsIcon, LogoutIcon, IncomeIcon, ExpenseIcon, TransferIcon, SettingsIcon, JsonIcon } from './icons';
 
-type View = 'dashboard' | 'income' | 'expense' | 'transfer' | 'reports' | 'category-settings';
+type View = 'dashboard' | 'income' | 'expense' | 'transfer' | 'reports' | 'category-settings' | 'data-management';
 
 interface SidebarProps {
   currentView: View;
@@ -83,6 +83,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, o
                         label="Kategori"
                         isActive={currentView === 'category-settings'}
                         onClick={() => setCurrentView('category-settings')}
+                    />
+                     <NavItem
+                        icon={<JsonIcon className="h-6 w-6" />}
+                        label="Manajemen Data"
+                        isActive={currentView === 'data-management'}
+                        onClick={() => setCurrentView('data-management')}
                     />
                 </ul>
             </nav>
