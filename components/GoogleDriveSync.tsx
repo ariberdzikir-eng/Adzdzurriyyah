@@ -11,7 +11,7 @@ interface GoogleDriveSyncProps {
   onRestore: (transactions: Transaction[]) => void;
 }
 
-type AuthState = 'idle' | 'pending' | 'authenticated' | 'error';
+type AuthState = 'idle' | 'pending' | 'authenticated' | 'error' | 'unconfigured';
 type SyncState = 'idle' | 'syncing' | 'success' | 'error';
 
 export const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ transactions, onRestore }) => {
@@ -19,19 +19,32 @@ export const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ transactions, 
   const [syncState, setSyncState] = useState<SyncState>('idle');
   const [syncMessage, setSyncMessage] = useState('');
   const [tokenClient, setTokenClient] = useState<any>(null);
+  const [showHelp, setShowHelp] = useState(false);
   
+  const isConfigured = CLIENT_ID && !CLIENT_ID.includes('YOUR_GOOGLE_CLIENT_ID');
   const transactionsRef = useRef(transactions);
+  
   useEffect(() => { transactionsRef.current = transactions; }, [transactions]);
 
   useEffect(() => {
+    if (!isConfigured) {
+        setAuthState('unconfigured');
+        return;
+    }
+
     const gapiLoaded = () => { window.gapi.load('client', initializeGapiClient); };
     const gisLoaded = () => {
-      const client = window.google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: '', 
-      });
-      setTokenClient(client);
+      try {
+        const client = window.google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPES,
+          callback: '', 
+        });
+        setTokenClient(client);
+      } catch (err) {
+        console.error("GIS Initialization failed", err);
+        setAuthState('error');
+      }
     };
 
     const checkScripts = setInterval(() => {
@@ -42,32 +55,40 @@ export const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ transactions, 
         }
     }, 100);
     return () => clearInterval(checkScripts);
-  }, []);
+  }, [isConfigured]);
 
   const initializeGapiClient = async () => {
-    await window.gapi.client.init({
-      apiKey: API_KEY,
-      discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
-    });
-    
-    // Cek apakah token masih valid di session
-    const token = sessionStorage.getItem('gdrive_token');
-    if (token) {
-        window.gapi.client.setToken({ access_token: token });
-        setAuthState('authenticated');
-        window.dispatchEvent(new CustomEvent('mosque-cloud-status', { detail: 'online' }));
-        // Auto-fetch data terbaru saat startup
-        handleRestore(true);
+    try {
+        await window.gapi.client.init({
+          apiKey: API_KEY,
+          discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+        });
+        
+        const token = sessionStorage.getItem('gdrive_token');
+        if (token) {
+            window.gapi.client.setToken({ access_token: token });
+            setAuthState('authenticated');
+            window.dispatchEvent(new CustomEvent('mosque-cloud-status', { detail: 'online' }));
+            handleRestore(true);
+        }
+    } catch (err) {
+        console.error("GAPI Init Error", err);
     }
   };
 
   const handleAuthClick = () => {
+    if (!isConfigured) {
+        setShowHelp(true);
+        return;
+    }
+    
     setAuthState('pending');
     if (tokenClient) {
       tokenClient.callback = async (resp: any) => {
         if (resp.error !== undefined) {
           setAuthState('error');
-          throw (resp);
+          setSyncMessage(`Gagal Otorisasi: ${resp.error_description || resp.error}`);
+          return;
         }
         sessionStorage.setItem('gdrive_token', resp.access_token);
         setAuthState('authenticated');
@@ -85,18 +106,12 @@ export const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ transactions, 
             fields: 'files(id, name)',
             spaces: 'drive'
         });
-        if (response.result.files && response.result.files.length > 0) {
-            return response.result.files[0].id;
-        }
-        return null;
-    } catch (e) {
-        return null;
-    }
+        return response.result.files?.[0]?.id || null;
+    } catch (e) { return null; }
   };
 
   const handleBackup = async (silent = false) => {
     if (authState !== 'authenticated') return;
-    
     if (!silent) {
         setSyncState('syncing');
         setSyncMessage('Sinkronisasi data ke awan...');
@@ -107,18 +122,13 @@ export const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ transactions, 
     const boundary = '-------314159265358979323846';
     const delimiter = "\r\n--" + boundary + "\r\n";
     const close_delim = "\r\n--" + boundary + "--";
-
     const fileMetadata = { name: BACKUP_FILE_NAME, mimeType: 'application/json' };
     const fileContent = JSON.stringify(transactionsRef.current, null, 2);
 
     const multipartRequestBody =
-        delimiter +
-        'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-        JSON.stringify(fileMetadata) +
-        delimiter +
-        'Content-Type: application/json\r\n\r\n' +
-        fileContent +
-        close_delim;
+        delimiter + 'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+        JSON.stringify(fileMetadata) + delimiter +
+        'Content-Type: application/json\r\n\r\n' + fileContent + close_delim;
     
     const request = window.gapi.client.request({
         path: `/upload/drive/v3/files${fileId ? `/${fileId}` : ''}`,
@@ -131,58 +141,31 @@ export const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ transactions, 
     request.execute((file: any, err: any) => {
         window.dispatchEvent(new CustomEvent('mosque-cloud-status', { detail: 'online' }));
         if (err) {
-            if (!silent) {
-                setSyncState('error');
-                setSyncMessage('Gagal sinkronisasi otomatis.');
-            }
+            if (!silent) { setSyncState('error'); setSyncMessage('Gagal sinkronisasi otomatis.'); }
         } else {
-            if (!silent) {
-                setSyncState('success');
-                setSyncMessage(`Data sinkron pada ${new Date().toLocaleTimeString()}`);
-            }
+            if (!silent) { setSyncState('success'); setSyncMessage(`Sinkron pada ${new Date().toLocaleTimeString()}`); }
         }
     });
   };
 
   const handleRestore = async (silent = false) => {
     if (authState !== 'authenticated') return;
-    
-    if (!silent) {
-        setSyncState('syncing');
-        setSyncMessage('Mengambil data terbaru dari awan...');
-    }
-    
+    if (!silent) { setSyncState('syncing'); setSyncMessage('Mengambil data terbaru...'); }
     const fileId = await findFileId();
     if (!fileId) {
-        if (!silent) {
-            setSyncState('error');
-            setSyncMessage('Belum ada data di awan.');
-        }
+        if (!silent) { setSyncState('error'); setSyncMessage('Belum ada data di awan.'); }
         return;
     }
-
     try {
-        const response = await window.gapi.client.drive.files.get({
-            fileId: fileId,
-            alt: 'media'
-        });
-        
+        const response = await window.gapi.client.drive.files.get({ fileId: fileId, alt: 'media' });
         const restoredTransactions = JSON.parse(response.body);
         onRestore(restoredTransactions);
-        
-        if (!silent) {
-            setSyncState('success');
-            setSyncMessage('Data terbaru berhasil dimuat!');
-        }
+        if (!silent) { setSyncState('success'); setSyncMessage('Data terbaru dimuat!'); }
     } catch (err) {
-        if (!silent) {
-            setSyncState('error');
-            setSyncMessage('Gagal memuat data dari awan.');
-        }
+        if (!silent) { setSyncState('error'); setSyncMessage('Gagal memuat data awan.'); }
     }
   };
 
-  // Listen for local changes to trigger auto-backup
   useEffect(() => {
     const triggerAutoBackup = () => handleBackup(true);
     window.addEventListener('mosque-data-changed', triggerAutoBackup);
@@ -191,53 +174,81 @@ export const GoogleDriveSync: React.FC<GoogleDriveSyncProps> = ({ transactions, 
 
   return (
     <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100 mt-6 overflow-hidden relative">
-        <div className="absolute top-0 right-0 p-4 opacity-5">
-            <svg className="h-24 w-24" fill="currentColor" viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-        </div>
+        <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase mb-2">Penyimpanan Online (Cloud)</h2>
         
-        <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase mb-2">Cloud Auto-Sync</h2>
-        <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-2xl mb-6">
-            <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest leading-relaxed">
-                STATUS: {authState === 'authenticated' ? 'AKTIF - DATA ANDA DISIMPAN KE CLOUD SETIAP KALI DIINPUT' : 'TIDAK AKTIF - DATA HANYA TERSIMPAN DI BROWSER INI'}
-            </p>
-        </div>
-        
-        {authState !== 'authenticated' && (
-            <button 
-                onClick={handleAuthClick}
-                disabled={authState === 'pending' || !tokenClient}
-                className="w-full flex items-center justify-center gap-3 bg-emerald-600 text-white font-black py-4 px-4 rounded-2xl shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all disabled:bg-slate-300 uppercase tracking-widest text-[10px]"
-            >
-                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12.545 11.033v3.199h4.488c-.176 1.137-1.282 3.315-4.488 3.315-2.767 0-5.023-2.292-5.023-5.114s2.256-5.114 5.023-5.114c1.572 0 2.624.662 3.226 1.242l2.536-2.446C16.669 4.604 14.809 3.867 12.545 3.867 7.742 3.867 3.867 7.742 3.867 12.545s3.875 8.678 8.678 8.678c4.987 0 8.329-3.51 8.329-8.475 0-.569-.062-1.003-.138-1.437h-8.191z"/></svg>
-                Aktifkan Sistem Online (Login Google)
-            </button>
-        )}
-
-        {authState === 'authenticated' && (
+        {authState === 'unconfigured' ? (
+            <div className="bg-rose-50 border border-rose-100 p-6 rounded-2xl">
+                <p className="text-rose-700 font-bold text-sm mb-4">Fitur Online belum dikonfigurasi!</p>
+                <p className="text-rose-600 text-xs leading-relaxed mb-6">Error "invalid_client" yang Anda lihat terjadi karena Anda perlu memasukkan <b>Google Client ID</b> milik Anda sendiri di file <code>googleConfig.ts</code>.</p>
+                <button 
+                    onClick={() => setShowHelp(true)}
+                    className="w-full py-3 bg-rose-600 text-white font-black rounded-xl uppercase tracking-widest text-[10px] shadow-lg shadow-rose-100"
+                >
+                    Lihat Cara Pasang (GRATIS)
+                </button>
+            </div>
+        ) : authState !== 'authenticated' ? (
+            <div className="space-y-4">
+                <p className="text-xs text-slate-500 mb-4">Gunakan Google Drive Anda untuk sinkronisasi data antar perangkat secara otomatis.</p>
+                <button 
+                    onClick={handleAuthClick}
+                    disabled={authState === 'pending'}
+                    className="w-full flex items-center justify-center gap-3 bg-emerald-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-emerald-100 hover:bg-emerald-700 transition-all uppercase tracking-widest text-[10px]"
+                >
+                    {authState === 'pending' ? 'Menghubungkan...' : 'Aktifkan Cloud Sync (Login Google)'}
+                </button>
+            </div>
+        ) : (
             <div className="space-y-4">
                 <div className="flex items-center gap-3 bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
-                    <div className="bg-emerald-500 rounded-full p-1"><svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg></div>
-                    <p className="text-[10px] text-emerald-700 font-black uppercase tracking-widest">Sistem Online & Terkoneksi</p>
+                    <div className="bg-emerald-500 rounded-full p-1 animate-pulse"><svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg></div>
+                    <p className="text-[10px] text-emerald-700 font-black uppercase tracking-widest">Sistem Sinkron Aktif</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                    <button onClick={() => handleBackup()} disabled={syncState === 'syncing'} className="bg-slate-800 text-white font-black py-4 px-2 rounded-2xl hover:bg-slate-900 transition-all disabled:bg-slate-200 uppercase tracking-widest text-[10px]">
-                        Paksa Simpan (Cloud)
-                    </button>
-                    <button onClick={() => handleRestore()} disabled={syncState === 'syncing'} className="bg-slate-100 text-slate-800 font-black py-4 px-2 rounded-2xl hover:bg-slate-200 transition-all disabled:bg-slate-200 uppercase tracking-widest text-[10px]">
-                        Ambil Data Terbaru
-                    </button>
+                    <button onClick={() => handleBackup()} className="bg-slate-800 text-white font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest">Simpan ke Cloud</button>
+                    <button onClick={() => handleRestore()} className="bg-slate-100 text-slate-800 font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest">Ambil Data Terbaru</button>
                 </div>
             </div>
         )}
 
         {syncMessage && (
-            <p className={`mt-6 text-center text-[10px] font-black uppercase tracking-widest p-3 rounded-xl ${
-                syncState === 'success' ? 'bg-emerald-50 text-emerald-700' : 
-                syncState === 'error' ? 'bg-rose-50 text-rose-700' :
-                'bg-sky-50 text-sky-700'
-            }`}>
+            <p className={`mt-6 text-center text-[10px] font-black uppercase tracking-widest p-3 rounded-xl ${syncState === 'success' ? 'bg-emerald-50 text-emerald-700' : syncState === 'error' ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700'}`}>
                 {syncMessage}
             </p>
+        )}
+
+        {/* Modal Bantuan Setup */}
+        {showHelp && (
+            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex justify-center items-center p-4">
+                <div className="bg-white rounded-3xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                    <div className="flex justify-between items-start mb-6">
+                        <h3 className="text-2xl font-black text-slate-800 uppercase italic">Cara Mengaktifkan Online Sync</h3>
+                        <button onClick={() => setShowHelp(false)} className="text-slate-400 hover:text-slate-600 font-black text-2xl">&times;</button>
+                    </div>
+                    
+                    <div className="space-y-6 text-sm text-slate-600">
+                        <p>Untuk menghilangkan error <b>invalid_client</b>, Anda harus mendaftarkan aplikasi ini di Google Cloud (Gratis):</p>
+                        
+                        <ol className="list-decimal ml-5 space-y-4 font-medium">
+                            <li>Buka <a href="https://console.cloud.google.com/" target="_blank" className="text-blue-600 underline">Google Cloud Console</a>.</li>
+                            <li>Buat <b>Project Baru</b> (Contoh: "Masjid Adz-Dzurriyyah").</li>
+                            <li>Cari dan Aktifkan <b>Google Drive API</b>.</li>
+                            <li>Masuk ke menu <b>APIs & Services > Credentials</b>.</li>
+                            <li>Klik <b>Create Credentials > OAuth Client ID</b>. Pilih "Web Application".</li>
+                            <li>Pada bagian <b>Authorized JavaScript origins</b>, masukkan URL aplikasi ini (misalnya: <code>http://localhost:5173</code> atau domain web Anda).</li>
+                            <li>Salin <b>Client ID</b> yang didapat, lalu tempel di file <code>googleConfig.ts</code> di aplikasi ini.</li>
+                            <li>Klik <b>Create Credentials > API Key</b>, lalu tempel juga di file tersebut.</li>
+                        </ol>
+
+                        <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
+                            <p className="text-amber-800 text-xs font-bold uppercase mb-2">💡 Tips</p>
+                            <p className="text-amber-700 text-xs">Jika Anda bingung, Anda tetap bisa menggunakan aplikasi ini secara <b>Offline</b>. Data akan otomatis tersimpan di browser ini saja.</p>
+                        </div>
+                    </div>
+                    
+                    <button onClick={() => setShowHelp(false)} className="w-full mt-8 py-4 bg-slate-800 text-white font-black rounded-2xl uppercase tracking-widest text-xs">Saya Mengerti</button>
+                </div>
+            </div>
         )}
     </div>
   );

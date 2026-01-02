@@ -1,14 +1,15 @@
-// PENTING: Ganti nilai-nilai di bawah ini dengan kredensial dari Google Cloud Console Anda.
-// Kunjungi https://console.cloud.google.com/ untuk mendapatkannya.
 
-// 1. Buat "API Key" di bawah "APIs & Services" > "Credentials".
-export const API_KEY = 'MASUKKAN_API_KEY_ANDA_DI_SINI';
+// PENTING: Anda harus mendapatkan nilai ini dari https://console.cloud.google.com/
+// Ini berbeda dengan API Key Gemini.
 
-// 2. Buat "OAuth 2.0 Client ID" untuk "Web application".
-export const CLIENT_ID = 'MASUKKAN_CLIENT_ID_ANDA_DI_SINI.apps.googleusercontent.com';
+// 1. Buat "API Key" di Google Cloud Console
+export const API_KEY = 'YOUR_GOOGLE_DRIVE_API_KEY';
 
-// 3. Ini adalah cakupan (scope) yang dibutuhkan aplikasi untuk mengakses Google Drive.
+// 2. Buat "OAuth 2.0 Client ID" tipe "Web application"
+// Tambahkan URL aplikasi Anda ke "Authorized JavaScript origins"
+export const CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+
+// 3. Nama file penyimpanan di Drive Anda
+export const BACKUP_FILE_NAME = 'adzdzurriyyah_cloud_backup.json';
+
 export const SCOPES = 'https://www.googleapis.com/auth/drive.file';
-
-// 4. Nama file untuk backup di Google Drive pengguna.
-export const BACKUP_FILE_NAME = 'masjidku_backup_data.json';
