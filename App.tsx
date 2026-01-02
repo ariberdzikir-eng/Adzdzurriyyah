@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Transaction, CategoryState } from './types';
 import { INITIAL_TRANSACTIONS, INCOME_CATEGORIES, EXPENSE_CATEGORIES, TRANSFER_CATEGORIES } from './constants';
 import { Sidebar } from './components/Sidebar';
@@ -16,7 +16,7 @@ import { BackupExcelView } from './components/BackupExcelView';
 import { AISummary } from './components/AISummary';
 import { Login } from './components/Login';
 import { PublicDashboard } from './components/PublicDashboard';
-import { IncomeIcon, ExpenseIcon, BalanceIcon, PlusIcon } from './components/icons';
+import { IncomeIcon, ExpenseIcon, BalanceIcon, PlusIcon, TrashIcon } from './components/icons';
 import { generateFinancialSummary } from './services/geminiService';
 import { GoogleDriveSync } from './components/GoogleDriveSync';
 
@@ -39,7 +39,7 @@ const AdminDashboard: React.FC<{
   onDeleteTransaction: (id: string) => void;
 }> = ({ transactions, onAddTransaction, onRestore, onViewTransaction, onEditTransaction, onDeleteTransaction }) => {
 
-  const { totalIncome, totalExpense, balance } = React.useMemo(() => {
+  const { totalIncome, totalExpense, balance } = useMemo(() => {
     let income = 0;
     let expense = 0;
     transactions.forEach(t => {
@@ -122,6 +122,10 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
+
+  // Filters state
+  const [filterDate, setFilterDate] = useState('');
+  const [filterMonth, setFilterMonth] = useState('');
 
   useEffect(() => {
     const savedTransactions = localStorage.getItem('mosque-transactions');
@@ -240,28 +244,76 @@ function App() {
     }
 
     let title = '';
-    let filteredTransactions: Transaction[] = [];
+    let type: 'income' | 'expense' | 'transfer' = 'income';
 
     if (currentView === 'income') {
       title = 'Manajemen Pemasukan';
-      filteredTransactions = transactions.filter(t => t.type === 'income');
+      type = 'income';
     } else if (currentView === 'expense') {
       title = 'Manajemen Pengeluaran';
-      filteredTransactions = transactions.filter(t => t.type === 'expense');
+      type = 'expense';
     } else if (currentView === 'transfer') {
       title = 'Manajemen Transfer Kas';
-      filteredTransactions = transactions.filter(t => t.type === 'transfer');
+      type = 'transfer';
     }
+
+    const filteredTransactions = transactions.filter(t => {
+      const isType = t.type === type;
+      const matchesDate = filterDate ? t.date === filterDate : true;
+      const matchesMonth = filterMonth ? t.date.startsWith(filterMonth) : true;
+      return isType && matchesDate && matchesMonth;
+    });
 
     return (
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-            <h1 className="text-3xl font-extrabold text-gray-900">{title}</h1>
-            <button onClick={handleOpenAddModal} className="flex items-center justify-center bg-emerald-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-emerald-700 transition-all transform active:scale-95 text-sm uppercase tracking-widest font-black">
+        <div className="flex flex-col lg:flex-row justify-between lg:items-center mb-8 gap-4">
+            <div>
+                <h1 className="text-3xl font-extrabold text-gray-900">{title}</h1>
+                <p className="text-gray-500 text-sm mt-1">Daftar rekaman {title.toLowerCase()} Masjid</p>
+            </div>
+            <button onClick={handleOpenAddModal} className="flex items-center justify-center bg-emerald-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-emerald-700 transition-all transform active:scale-95 text-sm uppercase tracking-widest font-black shrink-0">
                 <PlusIcon />
                 Tambah Data
             </button>
         </div>
+
+        {/* Filter Toolbar */}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6 flex flex-wrap items-end gap-4">
+            <div className="flex-1 min-w-[200px]">
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Pilih Hari (Tanggal)</label>
+                <input 
+                    type="date" 
+                    value={filterDate}
+                    onChange={(e) => {
+                        setFilterDate(e.target.value);
+                        setFilterMonth(''); // Reset month when date is selected
+                    }}
+                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                />
+            </div>
+            <div className="flex-1 min-w-[200px]">
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Pilih Bulan & Tahun</label>
+                <input 
+                    type="month" 
+                    value={filterMonth}
+                    onChange={(e) => {
+                        setFilterMonth(e.target.value);
+                        setFilterDate(''); // Reset date when month is selected
+                    }}
+                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                />
+            </div>
+            {(filterDate || filterMonth) && (
+                <button 
+                    onClick={() => { setFilterDate(''); setFilterMonth(''); }}
+                    className="flex items-center gap-2 px-6 py-2 bg-rose-50 text-rose-600 rounded-xl font-bold hover:bg-rose-100 transition-all text-sm h-[42px]"
+                >
+                    <TrashIcon className="h-4 w-4" />
+                    Bersihkan
+                </button>
+            )}
+        </div>
+
         <TransactionTable 
           transactions={filteredTransactions} 
           onRowClick={(t) => setSelectedTransaction(t)} 
