@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Transaction, CategoryState } from './types';
 import { INITIAL_TRANSACTIONS, INCOME_CATEGORIES, EXPENSE_CATEGORIES, TRANSFER_CATEGORIES } from './constants';
 import { Sidebar } from './components/Sidebar';
@@ -37,7 +37,8 @@ const AdminDashboard: React.FC<{
   onViewTransaction: (transaction: Transaction) => void;
   onEditTransaction: (transaction: Transaction) => void;
   onDeleteTransaction: (id: string) => void;
-}> = ({ transactions, onAddTransaction, onRestore, onViewTransaction, onEditTransaction, onDeleteTransaction }) => {
+  cloudStatus: 'offline' | 'online' | 'syncing';
+}> = ({ transactions, onAddTransaction, onRestore, onViewTransaction, onEditTransaction, onDeleteTransaction, cloudStatus }) => {
 
   const { totalIncome, totalExpense, balance } = useMemo(() => {
     let income = 0;
@@ -67,7 +68,21 @@ const AdminDashboard: React.FC<{
     <div className="max-w-7xl mx-auto">
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900">Panel Pengurus</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-extrabold text-gray-900">Panel Pengurus</h1>
+            {cloudStatus === 'online' && (
+              <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-black uppercase tracking-widest border border-emerald-200">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                Sistem Online
+              </span>
+            )}
+            {cloudStatus === 'syncing' && (
+              <span className="flex items-center gap-1.5 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-200">
+                <span className="w-2 h-2 bg-blue-500 rounded-full animate-spin"></span>
+                Sinkronisasi...
+              </span>
+            )}
+          </div>
           <p className="text-gray-500 mt-1">Masjid Adz-Dzurriyyah BKKBN</p>
         </div>
         <button onClick={onAddTransaction} className="flex items-center justify-center bg-emerald-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all transform active:scale-95 text-sm uppercase tracking-widest font-black">
@@ -122,11 +137,13 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
+  const [cloudStatus, setCloudStatus] = useState<'offline' | 'online' | 'syncing'>('offline');
 
   // Filters state
   const [filterDate, setFilterDate] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Initial load
   useEffect(() => {
     const savedTransactions = localStorage.getItem('mosque-transactions');
     if (savedTransactions) {
@@ -145,6 +162,7 @@ function App() {
     }
   }, []);
 
+  // Save to localStorage whenever data changes
   useEffect(() => {
     localStorage.setItem('mosque-transactions', JSON.stringify(transactions));
   }, [transactions]);
@@ -153,32 +171,33 @@ function App() {
     localStorage.setItem('mosque-categories', JSON.stringify(categories));
   }, [categories]);
 
+  // Handle transaction mutations
   const handleAddTransaction = (newTransaction: Omit<Transaction, 'id'>) => {
     const transactionWithId = { ...newTransaction, id: new Date().getTime().toString() };
     setTransactions(prev => [transactionWithId, ...prev]);
+    triggerCloudBackup();
   };
 
   const handleUpdateTransaction = (updatedTransaction: Transaction) => {
     setTransactions(prev => prev.map(t => t.id === updatedTransaction.id ? updatedTransaction : t));
     setTransactionToEdit(null);
+    triggerCloudBackup();
   };
 
   const handleDeleteTransaction = (id: string) => {
     setTransactions(prev => prev.filter(t => t.id !== id));
+    triggerCloudBackup();
   };
 
-  const handleOpenEditModal = (transaction: Transaction) => {
-    setTransactionToEdit(transaction);
-    setIsModalOpen(true);
-  };
+  const triggerCloudBackup = useCallback(() => {
+    // Memanggil event custom agar GoogleDriveSync bisa mendeteksi perubahan data
+    const event = new CustomEvent('mosque-data-changed');
+    window.dispatchEvent(event);
+  }, []);
 
-  const handleOpenAddModal = () => {
-    setTransactionToEdit(null);
-    setIsModalOpen(true);
-  };
-  
   const handleRestoreData = (restoredTransactions: Transaction[]) => {
     setTransactions(restoredTransactions);
+    setCloudStatus('online');
   };
 
   const handleLogin = () => {
@@ -193,38 +212,32 @@ function App() {
     setCurrentView('dashboard');
   };
 
+  // Listen to cloud status changes from GoogleDriveSync component
+  useEffect(() => {
+    const handleStatus = (e: any) => setCloudStatus(e.detail);
+    window.addEventListener('mosque-cloud-status', handleStatus);
+    return () => window.removeEventListener('mosque-cloud-status', handleStatus);
+  }, []);
+
   // Reset filters when changing views
   useEffect(() => {
     setFilterDate('');
     setSearchQuery('');
   }, [currentView]);
 
-  // 1. PUBLIC VIEW (Default)
   if (!isLoggedIn && !showLogin) {
-    return (
-      <PublicDashboard 
-        transactions={transactions} 
-        onAdminLoginClick={() => setShowLogin(true)} 
-      />
-    );
+    return <PublicDashboard transactions={transactions} onAdminLoginClick={() => setShowLogin(true)} />;
   }
 
-  // 2. LOGIN FORM
   if (showLogin) {
     return (
       <div className="relative">
-        <button 
-          onClick={() => setShowLogin(false)} 
-          className="absolute top-8 left-8 text-emerald-600 font-bold hover:underline z-50 flex items-center"
-        >
-          &larr; Kembali ke Dashboard Publik
-        </button>
+        <button onClick={() => setShowLogin(false)} className="absolute top-8 left-8 text-emerald-600 font-bold hover:underline z-50 flex items-center">&larr; Dashboard Publik</button>
         <Login onLogin={handleLogin} />
       </div>
     );
   }
 
-  // 3. ADMIN PANEL (Authenticated)
   const renderAdminContent = () => {
     if (currentView === 'dashboard') {
       return <AdminDashboard 
@@ -234,34 +247,20 @@ function App() {
                 onViewTransaction={(t) => setSelectedTransaction(t)}
                 onEditTransaction={handleOpenEditModal}
                 onDeleteTransaction={handleDeleteTransaction}
+                cloudStatus={cloudStatus}
              />;
     }
-    if (currentView === 'reports') {
-      return <ReportsView transactions={transactions} />;
-    }
-    if (currentView === 'category-settings') {
-      return <CategorySettingsView categories={categories} onUpdateCategories={setCategories} />;
-    }
-    if (currentView === 'data-management') {
-      return <DataManagementView transactions={transactions} onImport={handleRestoreData} />;
-    }
-    if (currentView === 'backup-excel') {
-      return <BackupExcelView transactions={transactions} onImport={handleRestoreData} />;
-    }
+    if (currentView === 'reports') return <ReportsView transactions={transactions} />;
+    if (currentView === 'category-settings') return <CategorySettingsView categories={categories} onUpdateCategories={setCategories} />;
+    if (currentView === 'data-management') return <DataManagementView transactions={transactions} onImport={handleRestoreData} />;
+    if (currentView === 'backup-excel') return <BackupExcelView transactions={transactions} onImport={handleRestoreData} />;
 
     let title = '';
     let type: 'income' | 'expense' | 'transfer' = 'income';
 
-    if (currentView === 'income') {
-      title = 'Manajemen Pemasukan';
-      type = 'income';
-    } else if (currentView === 'expense') {
-      title = 'Manajemen Pengeluaran';
-      type = 'expense';
-    } else if (currentView === 'transfer') {
-      title = 'Manajemen Transfer Kas';
-      type = 'transfer';
-    }
+    if (currentView === 'income') { title = 'Manajemen Pemasukan'; type = 'income'; }
+    else if (currentView === 'expense') { title = 'Manajemen Pengeluaran'; type = 'expense'; }
+    else if (currentView === 'transfer') { title = 'Manajemen Transfer Kas'; type = 'transfer'; }
 
     const filteredTransactions = transactions.filter(t => {
       const isType = t.type === type;
@@ -281,81 +280,42 @@ function App() {
                 <p className="text-gray-500 text-sm mt-1">Daftar rekaman {title.toLowerCase()} Masjid</p>
             </div>
             <button onClick={handleOpenAddModal} className="flex items-center justify-center bg-emerald-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:bg-emerald-700 transition-all transform active:scale-95 text-sm uppercase tracking-widest font-black shrink-0">
-                <PlusIcon />
-                Tambah Data
+                <PlusIcon /> Tambah Data
             </button>
         </div>
 
-        {/* Improved Search & Filter Toolbar */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-6 flex flex-wrap items-end gap-4">
             <div className="flex-[2] min-w-[280px]">
                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Cari Transaksi</label>
                 <div className="relative">
-                  <input 
-                      type="text" 
-                      placeholder="Cari deskripsi atau kategori..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
-                  />
+                  <input type="text" placeholder="Cari deskripsi..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold" />
                   <div className="absolute left-3 top-2.5 text-gray-400">
-                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                   </div>
                 </div>
             </div>
             <div className="flex-1 min-w-[200px]">
-                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Filter Hari (Tanggal)</label>
-                <input 
-                    type="date" 
-                    value={filterDate}
-                    onChange={(e) => setFilterDate(e.target.value)}
-                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
-                />
+                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 ml-1">Filter Hari</label>
+                <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold" />
             </div>
             {(filterDate || searchQuery) && (
-                <button 
-                    onClick={() => { setFilterDate(''); setSearchQuery(''); }}
-                    className="flex items-center gap-2 px-6 py-2 bg-rose-50 text-rose-600 rounded-xl font-bold hover:bg-rose-100 transition-all text-sm h-[42px]"
-                >
-                    <TrashIcon className="h-4 w-4" />
-                    Bersihkan
-                </button>
+                <button onClick={() => { setFilterDate(''); setSearchQuery(''); }} className="flex items-center gap-2 px-6 py-2 bg-rose-50 text-rose-600 rounded-xl font-bold hover:bg-rose-100 transition-all text-sm h-[42px]"><TrashIcon className="h-4 w-4" /> Bersihkan</button>
             )}
         </div>
-
-        <TransactionTable 
-          transactions={filteredTransactions} 
-          onRowClick={(t) => setSelectedTransaction(t)} 
-          onDelete={handleDeleteTransaction}
-          onEdit={handleOpenEditModal}
-        />
+        <TransactionTable transactions={filteredTransactions} onRowClick={(t) => setSelectedTransaction(t)} onDelete={handleDeleteTransaction} onEdit={handleOpenEditModal} />
       </div>
     );
   };
 
+  const handleOpenEditModal = (transaction: Transaction) => { setTransactionToEdit(transaction); setIsModalOpen(true); };
+  const handleOpenAddModal = () => { setTransactionToEdit(null); setIsModalOpen(true); };
+
   return (
     <div className="flex h-screen bg-gray-50 font-sans">
       <Sidebar currentView={currentView} setCurrentView={setCurrentView} onLogout={handleLogout} />
-      <main className="flex-1 p-6 md:p-10 overflow-y-auto">
-        {renderAdminContent()}
-      </main>
-      
-      <TransactionModal 
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onAddTransaction={handleAddTransaction}
-        onEditTransaction={handleUpdateTransaction}
-        categories={categories}
-        transactionToEdit={transactionToEdit}
-      />
-
-      <TransactionDetailModal 
-        transaction={selectedTransaction}
-        isOpen={!!selectedTransaction}
-        onClose={() => setSelectedTransaction(null)}
-      />
+      <main className="flex-1 p-6 md:p-10 overflow-y-auto">{renderAdminContent()}</main>
+      <TransactionModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onAddTransaction={handleAddTransaction} onEditTransaction={handleUpdateTransaction} categories={categories} transactionToEdit={transactionToEdit} />
+      <TransactionDetailModal transaction={selectedTransaction} isOpen={!!selectedTransaction} onClose={() => setSelectedTransaction(null)} />
     </div>
   );
 }
